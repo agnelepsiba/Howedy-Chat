@@ -7,18 +7,18 @@ the `howdy-chat` frontend's typed socket contract exactly.
 
 ```
 src/
-├── config/          env.ts (validated env vars via zod), db.ts (Mongoose connection)
+├── config/           env.ts (validated env vars via zod), db.ts (Mongoose connection)
 ├── models/           User, Conversation, Message (Mongoose schemas)
-├── middleware/        auth.ts (JWT bearer verification for REST), errorHandler.ts
-├── routes/            authRoutes, conversationRoutes
-├── controllers/       authController, conversationController
-├── services/           authService (JWT sign/verify), conversationService (queries)
+├── routes/           authRoutes, conversationRoutes, uploadRoutes
+├── controllers/      authController, conversationController, uploadController
+├── services/         authService (JWT logic), conversationService, uploadService
+├── repositories/     userRepository, conversationRepository, messageRepository (strictly DB queries)
 ├── socket/
-│   ├── index.ts         Socket.IO server: JWT handshake auth, handler registration
-│   ├── types.ts          Event contracts — mirrors frontend's socket.types.ts exactly
-│   └── handlers/         messageHandlers, typingHandlers, presenceHandlers
-├── app.ts             Express app assembly
-└── server.ts           Entry point: connects DB, starts HTTP + Socket.IO server
+│   ├── index.ts      Socket.IO server: JWT handshake auth, handler registration
+│   ├── types.ts      Event contracts — mirrors frontend's socket.types.ts exactly
+│   └── handlers/     messageHandlers, typingHandlers, presenceHandlers
+├── app.ts            Express app assembly
+└── server.ts         Entry point: connects DB, starts HTTP + Socket.IO server
 ```
 
 ### Auth flow
@@ -49,15 +49,14 @@ src/
 
 ### 2. Install & configure
 ```bash
-cd howdy-chat-backend
 npm install
 cp .env.example .env
 ```
 Edit `.env`:
 ```
 PORT=4000
-MONGODB_URI=mongodb://localhost:27017/howdy-chat
-JWT_SECRET=<generate a long random string>
+MONGODB_URI=mongodb://localhost:27017/chat
+JWT_SECRET=1WsF7SERagNYFivhoNYbnmeoNExEyYYpSBMKbiR7Jzz
 JWT_EXPIRES_IN=7d
 CLIENT_ORIGIN=http://localhost:5173
 ```
@@ -76,7 +75,7 @@ Health check: `GET http://localhost:4000/health` → `{ "status": "ok" }`
 |---|---|---|---|---|
 | POST | `/api/auth/register` | — | `{ name, email, password }` | Create account, returns `{ token, user }` |
 | POST | `/api/auth/login` | — | `{ email, password }` | Returns `{ token, user }` |
-| GET | `/api/auth/me` | Bearer | — | Returns the current user (used to restore sessions on reload) |
+| GET | `/api/auth/myProfile` | Bearer | — | Returns the current user (used to restore sessions on reload) |
 | GET | `/api/conversations` | Bearer | — | List conversations for the current user |
 | POST | `/api/conversations` | Bearer | `{ participantIds, name, isGroup }` | Create a conversation |
 | GET | `/api/conversations/:id/messages` | Bearer | `?cursor=<messageId>` | Paginated history, newest page first, 30/page |
@@ -92,13 +91,3 @@ The frontend already implements the full login/register/session-restore flow aga
 exact endpoints (`src/services/authApi.ts`, `src/pages/LoginPage.tsx`,
 `src/hooks/useAuthBootstrap.ts`) and authenticates the socket with the stored JWT.
 
-## Notes for production
-
-- Add refresh tokens if you want shorter-lived access tokens.
-- Add rate limiting on `/api/auth/*` (e.g. `express-rate-limit`) to slow brute-force attempts.
-- Add a Socket.IO Redis adapter (`@socket.io/redis-adapter`) if you scale to multiple server
-  instances, so rooms/broadcasts work across nodes.
-- Add indexes as query patterns emerge; `Message` already has a compound index on
-  `{ conversationId, createdAt }` for the common pagination query.
-- Consider soft-deletes / edit history if you need message editing beyond the `editedAt` field
-  already on the schema.
